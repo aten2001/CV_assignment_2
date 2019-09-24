@@ -8,8 +8,12 @@ min_distance_between_centers = 10
 theta_pace_detect_offset = 80
 threshold_no_gradient = 30
 theta_pace_draw = 100
+
+
 def detectCircles(im, radius, useGradient):
     edge = skimage.feature.canny(skimage.color.rgb2gray(im), sigma=3)
+    plt.imshow(edge)
+    plt.show()
     h, w, _ = im.shape
     acc = dict()
     acc_mat = np.zeros((h, w))
@@ -27,9 +31,9 @@ def detectCircles(im, radius, useGradient):
                             acc[(a, b)] = acc.get((a, b), 0) + 1
                             acc_mat[a, b] += 1
     if useGradient == 1:
-        threshold = 4
+        threshold = 15
         gradient_map = np.gradient(skimage.color.rgb2gray(im))
-        theta_map = np.arctan(gradient_map[1]/gradient_map[0])
+        theta_map = np.arctan(-gradient_map[1]/gradient_map[0])
         for i in range(h):
             for j in range(w):
                 if edge[i, j]:
@@ -38,23 +42,26 @@ def detectCircles(im, radius, useGradient):
                         theta = np.pi/2
                     a = int(-radius * np.cos(theta) + i)
                     b = int(radius * np.sin(theta) + j)
-                    if isValid(h, w, a, b):
-                        acc[(a, b)] = acc.get((a, b), 0) + 1
-                        acc_mat[a, b] += 1
+                    for augmented_a_b in augment_a_b(a,b):
+                        a_aug = augmented_a_b[0]
+                        b_aug = augmented_a_b[1]
+                        if isValid(h, w, a_aug, b_aug):
+                            acc[(a_aug, b_aug)] = acc.get((a_aug, b_aug), 0) + 1
+                            acc_mat[a_aug, b_aug] += 1
 
 
     # Getting centers of the circle + post-processing
     print(np.max(acc_mat))
-    plt.imshow(acc_mat, cmap='gray')
+    plt.imshow(acc_mat)
     plt.show()
     acc_sorted = sorted(acc.items(), key=lambda kv: kv[1], reverse=True)
-    qualified_center = set()
+    qualified_center = []
     for k, v in acc_sorted:
         if v < threshold:
             break
         else:
             if not_close_center(k, qualified_center):
-                qualified_center.add(k)
+                qualified_center.append(k)
 
     # For constructing binary image with circle on it
     new_img = np.zeros((h, w), dtype=np.uint8)
@@ -65,7 +72,7 @@ def detectCircles(im, radius, useGradient):
             j = int(radius * np.sin(theta) + center[1])
             if isValid(h, w, i, j):
                 new_img[i, j] = 255
-    return new_img
+    return qualified_center, new_img
 
 
 def not_close_center(pos, set):
@@ -82,9 +89,22 @@ def isValid(h, w, a, b):
         return False
     return True
 
+def augment_a_b(a,b):
+    res = []
+    augment = [[-1,-1],[-1,0],[-1,1],
+               [0,-1],[0,0],[0,1],
+               [1,-1],[1,0],[1,1]]
+    for aug in augment:
+        res.append((a+aug[0], b+aug[1]))
+    return res
 
-im = scipy.misc.imread('egg.jpg')
+im = scipy.misc.imread('jupiter.jpg')
+centers, img_with_cercle = detectCircles(im, 10, 1)
 plt.imshow(im)
-plt.show()
-plt.imshow(detectCircles(im, 4, 0), cmap='gray')
+xs = []
+ys = []
+for center in centers:
+    xs.append(center[0])
+    ys.append(center[1])
+plt.scatter(ys, xs, s=5,c='r')
 plt.show()
